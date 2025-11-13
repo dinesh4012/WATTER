@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<body class=""> <!-- Removed body padding for full width -->
+    <!-- Essential meta tags and styles/scripts moved from head to body to maintain functionality -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Bill Allocation Calculator</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the Inter font and overall aesthetics */
+        :root {
+            --primary: #3b82f6; /* Blue-500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Gray-100 */
+            margin: 0; /* Ensure no default body margin */
+            padding: 0; /* Ensure no default body padding */
+        }
+        .container {
+            /* Now forces 100% width on all screens */
+            width: 100%; 
+            max-width: 100%; 
+            margin: 0; /* Remove centering margins */
+            border-radius: 0; /* Optional: Remove card rounding for a cleaner edge-to-edge look */
+        }
+        /* All @media max-width rules for container are removed to force 100% width */
+        
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Custom styling for the usage input fields to remove number arrows */
+        .usage-input {
+            appearance: none; 
+            -moz-appearance: textfield; 
+        }
+    </style>
+
+    <!-- The container is now full-width -->
+    <div class="container bg-white card rounded-none p-4 space-y-4 min-h-screen"> 
+        <!-- Input Section (Total Bill) -->
+        <div class="space-y-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+            <label for="totalBill" class="block text-lg font-medium text-gray-700">
+                Total Electricity Bill Amount (₹)
+            </label>
+            <input
+                type="number"
+                id="totalBill"
+                placeholder="e.g., 2500"
+                class="w-full px-4 py-2 border border-blue-400 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 shadow-sm"
+                min="0"
+                step="0.01"
+                oninput="calculateBill()"
+            />
+            <!-- New Flex Container for Buttons -->
+            <div class="flex flex-col sm:flex-row gap-2">
+                <button
+                    onclick="calculateBill()"
+                    class="w-full sm:w-1/2 bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition duration-150 ease-in-out shadow-md"
+                    id="calculateButton"
+                >
+                    Recalculate Shares
+                </button>
+                <!-- New Reset Button -->
+                <button
+                    onclick="resetUsages()"
+                    class="w-full sm:w-1/2 bg-gray-500 text-white font-semibold py-3 rounded-lg hover:bg-gray-600 transition duration-150 ease-in-out shadow-md"
+                    id="resetButton"
+                >
+                    Clear Readings
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary and Rate Display -->
+        <div id="summary" class="bg-gray-100 p-3 rounded-lg hidden">
+            <p class="text-sm font-semibold text-gray-700">Total Calculated Usage: <span id="totalUsageDisplay" class="font-bold text-blue-600">0</span> Liters</p>
+            <p class="text-sm font-semibold text-gray-700">Cost per Liter: <span id="ratePerLiterDisplay" class="font-bold text-green-600">N/A</span> ₹/Liter</p>
+        </div>
+
+        <!-- Results Table (Includes Editable Usage & Names) -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white rounded-lg shadow-inner">
+                <thead class="bg-blue-600 text-white">
+                    <tr>
+                        <!-- Tenant column 3/12 width -->
+                        <th class="px-3 py-2 text-left text-sm font-semibold rounded-tl-lg w-3/12">Tenant (Editable)</th>
+                        <!-- Old Usage column 2/12 width -->
+                        <th class="px-1 py-2 text-center text-sm font-semibold w-2/12">Old (L)</th>
+                        <!-- New Usage column 2/12 width -->
+                        <th class="px-1 py-2 text-center text-sm font-semibold w-2/12">New (L)</th>
+                        <!-- Calculated Usage (Diff) column 2/12 width -->
+                        <th class="px-1 py-2 text-center text-sm font-semibold w-2/12">Usage (Diff)</th>
+                        <!-- Share column 3/12 width -->
+                        <th class="px-3 py-2 text-right text-sm font-semibold rounded-tr-lg w-3/12">Share (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody" class="divide-y divide-gray-200">
+                    <!-- Dynamic rows will be inserted here by JavaScript -->
+                </tbody>
+                <tfoot id="totalRow" class="hidden border-t-4 border-blue-600">
+                    <tr class="bg-blue-50">
+                        <!-- Total column spans 3/12 width -->
+                        <td class="px-3 py-2 text-left font-bold text-gray-800 w-3/12">TOTAL</td>
+                        <!-- Old Usage Total (2/12 width) -->
+                        <td class="px-1 py-2 text-center font-bold text-gray-800 w-2/12" id="totalOldUsageFooter"></td>
+                        <!-- New Usage Total (2/12 width) -->
+                        <td class="px-1 py-2 text-center font-bold text-gray-800 w-2/12" id="totalNewUsageFooter"></td>
+                        <!-- Calculated Usage Total (2/12 width) -->
+                        <td class="px-1 py-2 text-center font-bold text-gray-800 w-2/12" id="totalUsageFooter">0</td>
+                        <!-- Bill total (3/12 width) -->
+                        <td class="px-3 py-2 text-right font-bold text-gray-800 w-3/12" id="totalBillFooter">₹ 0</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <!-- Message Box for Alerts (replacing alert()) -->
+        <div id="messageBox" class="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden" role="alert">
+            <p id="messageText" class="text-sm font-medium"></p>
+        </div>
+    </div>
+
+    <script>
+        // Data provided in the user's prompt (serves as initial data structure)
+        const initialTenantData = [
+            // Current 'usage' is set as the initial 'newUsage' reading, and 'oldUsage' is set to 0.
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+            { name: '', newUsage: 0, oldUsage: 0 },
+        ];
+
+        // DOM elements
+        const totalBillInput = document.getElementById('totalBill');
+        const resultsTableBody = document.getElementById('resultsTableBody');
+        const summaryDiv = document.getElementById('summary');
+        const totalUsageDisplay = document.getElementById('totalUsageDisplay');
+        const ratePerLiterDisplay = document.getElementById('ratePerLiterDisplay');
+        const totalRow = document.getElementById('totalRow');
+        const totalOldUsageFooter = document.getElementById('totalOldUsageFooter');
+        const totalNewUsageFooter = document.getElementById('totalNewUsageFooter');
+        const totalUsageFooter = document.getElementById('totalUsageFooter');
+        const totalBillFooter = document.getElementById('totalBillFooter');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        
+        let isTableRendered = false; 
+
+        /**
+         * Shows a temporary error message in the custom message box.
+         * @param {string} message - The error message to display.
+         */
+        function showMessage(message) {
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        /**
+         * Generates a single table row HTML with Old, New, and Difference columns.
+         * @param {string} name - The tenant name.
+         * @param {number} newUsage - The new meter reading.
+         * @param {number} oldUsage - The old meter reading.
+         * @param {number} index - The row index for styling.
+         * @returns {string} The HTML for the table row.
+         */
+        function createTenantRowHTML(name, newUsage, oldUsage, index) {
+            const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const calculatedUsage = Math.max(0, newUsage - oldUsage); // Calculate initial diff
+
+            return `
+                <tr class="${rowClass} hover:bg-blue-100 transition duration-150">
+                    <td class="px-3 py-2 text-left font-medium text-gray-900 w-3/12">
+                        <!-- Tenant Name Input -->
+                        <input 
+                            type="text" 
+                            value="${name}"
+                            placeholder="Enter Tenant Name"
+                            oninput="calculateBill()"
+                            class="w-full p-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 tenant-name-input"
+                        />
+                    </td>
+                    <td class="px-1 py-2 text-center w-2/12">
+                        <!-- Old Usage Input -->
+                        <input
+                            type="number"
+                            value="${oldUsage}"
+                            min="0"
+                            step="1"
+                            oninput="calculateBill()"
+                            class="w-full text-center p-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 old-usage-input usage-input"
+                        />
+                    </td>
+                    <td class="px-1 py-2 text-center w-2/12">
+                        <!-- New Usage Input -->
+                        <input
+                            type="number"
+                            value="${newUsage}"
+                            min="0"
+                            step="1"
+                            oninput="calculateBill()"
+                            class="w-full text-center p-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 new-usage-input usage-input"
+                        />
+                    </td>
+                    <td class="px-1 py-2 text-center font-medium text-blue-700 usage-diff-cell w-2/12">
+                        <!-- Calculated Usage (Difference) -->
+                        ${calculatedUsage.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-gray-800 bill-amount w-3/12">
+                        <!-- Calculated Share -->
+                        ₹ 0
+                    </td>
+                </tr>
+            `;
+        }
+
+
+        /**
+         * Renders the initial table structure based on initialTenantData.
+         */
+        function renderUsageTable() {
+            if (isTableRendered) return;
+            
+            let tableHTML = '';
+            initialTenantData.forEach((tenant, index) => {
+                tableHTML += createTenantRowHTML(tenant.name, tenant.newUsage, tenant.oldUsage, index);
+            });
+            resultsTableBody.innerHTML = tableHTML;
+            isTableRendered = true;
+        }
+
+        /**
+         * Clears all Old and New Usage input fields and recalculates the bill.
+         */
+        function resetUsages() {
+            const rows = resultsTableBody.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                const oldUsageInput = row.querySelector('.old-usage-input');
+                const newUsageInput = row.querySelector('.new-usage-input');
+                
+                if (oldUsageInput) oldUsageInput.value = '';
+                if (newUsageInput) newUsageInput.value = '';
+            });
+
+            // Recalculate to clear derived fields (Usage Diff, Share, Totals)
+            // This is the call that triggers the shares to zero out
+            calculateBill();
+            
+            showMessage("All Old and New Usage fields have been cleared.");
+        }
+
+
+        /**
+         * Calculates the individual water bill shares based on the total bill and current usages read from the inputs.
+         */
+        function calculateBill() {
+            if (!isTableRendered) {
+                renderUsageTable();
+            }
+
+            const totalBillStr = totalBillInput.value;
+            const totalBill = parseFloat(totalBillStr);
+
+            let dynamicTotalUsage = 0; // Total of the DIFFERENCE (New - Old)
+            let totalOldUsage = 0;
+            let totalNewUsage = 0;
+            let calculationAborted = false;
+            const rows = resultsTableBody.querySelectorAll('tr');
+
+            // console.log("--- Starting Calculation ---"); // Debugging removed
+            // console.log(`1. Total Bill (Input): ${totalBillStr} | Parsed: ${totalBill}`); // Debugging removed
+
+
+            // 1. Dynamic Total Usage Calculation and Input Validation
+            rows.forEach(row => {
+                const oldUsageInput = row.querySelector('.old-usage-input');
+                const newUsageInput = row.querySelector('.new-usage-input');
+                const usageDiffCell = row.querySelector('.usage-diff-cell');
+                const billAmountCell = row.querySelector('.bill-amount'); // Get bill cell for immediate cleanup
+                
+                const oldUsage = parseFloat(oldUsageInput.value);
+                const newUsage = parseFloat(newUsageInput.value);
+                
+                let usage = 0;
+
+                // Check for invalid (NaN) or negative numbers
+                if (isNaN(oldUsage) || oldUsage < 0 || isNaN(newUsage) || newUsage < 0) {
+                    if (!calculationAborted) {
+                        // Set calculationAborted but allow loop to finish processing other rows
+                        showMessage("Invalid usage value detected (must be non-negative). Please correct the input.");
+                        calculationAborted = true;
+                    }
+                    usageDiffCell.textContent = '-';
+                    billAmountCell.textContent = '₹ 0'; // Clear share for this invalid row
+                    return;
+                }
+
+                totalOldUsage += oldUsage;
+                totalNewUsage += newUsage;
+                
+                if (newUsage < oldUsage) {
+                     if (!calculationAborted) {
+                        showMessage(`New Usage (${newUsage}) cannot be less than Old Usage (${oldUsage}) for a tenant.`);
+                        calculationAborted = true;
+                    }
+                    usageDiffCell.textContent = 'Error';
+                    billAmountCell.textContent = '₹ 0'; // Clear share for this invalid row
+                    return;
+                }
+
+                usage = newUsage - oldUsage;
+                
+                // Update the calculated difference display
+                usageDiffCell.textContent = usage.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+                dynamicTotalUsage += usage;
+            });
+
+            // NOTE: We don't exit early on calculationAborted here. We proceed to step 2 
+            // to ensure footers and total bill checks are performed, and shares are correctly zeroed.
+
+            // console.log(`1. Usage Totals: Old=${totalOldUsage} | New=${totalNewUsage} | Allocation Usage=${dynamicTotalUsage}`); // Debugging removed
+
+            // Update total usage displays
+            const formattedTotalUsage = dynamicTotalUsage.toLocaleString('en-IN');
+            totalUsageDisplay.textContent = formattedTotalUsage;
+            totalUsageFooter.textContent = formattedTotalUsage;
+            totalOldUsageFooter.textContent = totalOldUsage.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            totalNewUsageFooter.textContent = totalNewUsage.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+
+            // 2. Initial Total Bill Validation
+            if (isNaN(totalBill) || totalBill <= 0) {
+                // If bill is invalid or zero, clear all share amounts
+                rows.forEach(row => row.querySelector('.bill-amount').textContent = '₹ 0');
+                ratePerLiterDisplay.textContent = 'N/A';
+                summaryDiv.classList.add('hidden');
+                totalRow.classList.add('hidden');
+                totalBillFooter.textContent = '₹ 0';
+                
+                // Show instructional message if usage is present but bill is missing
+                if (totalBillStr.trim() === '' && dynamicTotalUsage > 0) {
+                    showMessage("Water Usage difference is calculated. Enter the Total Water Bill Amount (₹) to see the shares.");
+                } else if (totalBillStr.trim() !== '' && totalBill <= 0) {
+                    showMessage("Total Bill Amount must be greater than ₹0 to calculate shares.");
+                }
+                
+                return;
+            }
+            // console.log("2. Status: Total Bill is valid."); // Debugging removed
+            
+            // 3. Core Calculation
+            if (dynamicTotalUsage <= 0) {
+                showMessage("Total calculated water usage (New - Old) is zero. Cannot allocate the bill.");
+                rows.forEach(row => row.querySelector('.bill-amount').textContent = '₹ 0');
+                ratePerLiterDisplay.textContent = 'N/A';
+                summaryDiv.classList.remove('hidden');
+                totalRow.classList.remove('hidden');
+                
+                // Keep total bill displayed, but round it
+                const roundedTotalBill = Math.round(totalBill);
+                totalBillFooter.textContent = '₹ ' + roundedTotalBill.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+                // console.log("3. Status: Total Usage is zero. Cannot allocate bill."); // Debugging removed
+                return;
+            }
+
+            const ratePerLiter = totalBill / dynamicTotalUsage;
+            // console.log(`3. Rate Per Liter: ${ratePerLiter}`); // Debugging removed
+            
+            // 4. Display Summary
+            ratePerLiterDisplay.textContent = ratePerLiter.toFixed(4);
+            summaryDiv.classList.remove('hidden');
+
+            // 5. Update Table Results
+            rows.forEach(row => {
+                const oldUsageInput = row.querySelector('.old-usage-input');
+                const newUsageInput = row.querySelector('.new-usage-input');
+                const billAmountCell = row.querySelector('.bill-amount');
+
+                const oldUsage = parseFloat(oldUsageInput.value);
+                const newUsage = parseFloat(newUsageInput.value);
+                
+                let usage = newUsage - oldUsage; 
+                
+                // Final safety check (should be covered by step 1/2/3)
+                if (usage < 0 || isNaN(usage) || isNaN(oldUsage) || isNaN(newUsage)) {
+                    billAmountCell.textContent = `₹ 0`;
+                    return;
+                }
+
+                const individualBill = usage * ratePerLiter;
+                
+                // ROUND OFF to the nearest whole number (User Request)
+                const roundedBill = Math.round(individualBill);
+                
+                // Format the bill amount for display (0 decimal places)
+                const formattedBill = roundedBill.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+                
+                billAmountCell.textContent = `₹ ${formattedBill}`;
+            });
+
+            // 6. Update Footer
+            const roundedTotalBill = Math.round(totalBill);
+            totalBillFooter.textContent = '₹ ' + roundedTotalBill.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            totalRow.classList.remove('hidden');
+            // console.log("--- Calculation Finished ---"); // Debugging removed
+        }
+
+        // Initialize: Render the editable table and run initial calculation on load
+        window.onload = function() {
+            renderUsageTable();
+            // Run calculateBill() to initialize total usage display and clear bill amounts
+            calculateBill();
+        };
+    </script>
+</body>
+</html>
